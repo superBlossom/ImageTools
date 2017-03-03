@@ -1,0 +1,129 @@
+package com.hzbank.compressimage;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Rect;
+import android.util.Base64;
+import android.graphics.Bitmap.Config;
+
+/**
+ * 
+ * 图片压缩到100k以下 两种方法 1.compressBitmap(bitmap)尺寸压缩+质量压缩 2.getSmallBitmap(filepath)
+ * 根据路径压缩
+ * 
+ * @author Administrator
+ *
+ */
+public class CompressImage {
+
+	/**
+	 * 
+	 * 获取尺寸压缩的比
+	 * 
+	 * @param bitWidth
+	 *            图片的宽
+	 * @param bitHeight
+	 *            图片的高
+	 * @return
+	 */
+	public static int getRatioSize(int bitWidth, int bitHeight) {
+		// 图片最大分辨率
+		int imageHeight = 800;
+		int imageWidth = 480;
+		// 缩放比
+		int ratio = 1;
+		// 缩放比,由于是固定比例缩放，只用高或者宽其中一个数据进行计算即可
+		if (bitWidth > bitHeight && bitWidth > imageWidth) {
+			// 如果图片宽度比高度大,以宽度为基准
+			ratio = bitWidth / imageWidth;
+		} else if (bitWidth < bitHeight && bitHeight > imageHeight) {
+			// 如果图片高度比宽度大，以高度为基准
+			ratio = bitHeight / imageHeight;
+		}
+		// 最小比率为1
+		if (ratio <= 0)
+			ratio = 1;
+		return ratio;
+	}
+
+	/**
+	 * 
+	 * 质量压缩+尺寸压缩，压到100k以下
+	 * 
+	 * @param image
+	 * @return 压缩后的bitmap
+	 */
+	public static Bitmap compressBitmap(Bitmap image) {
+		// 最大图片大小 100KB
+		int maxSize = 100;
+		// 获取尺寸压缩倍数
+		int ratio = getRatioSize(image.getWidth(), image.getHeight());
+		// 压缩Bitmap到对应尺寸
+		Bitmap result = Bitmap.createBitmap(image.getWidth() / ratio, image.getHeight() / ratio, Config.ARGB_8888);
+		Canvas canvas = new Canvas(result);
+		Rect rect = new Rect(0, 0, image.getWidth() / ratio, image.getHeight() / ratio);
+		canvas.drawBitmap(image, null, rect, null);
+
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		// 质量压缩方法，这里100表示不压缩，把压缩后的数据存放到baos中
+		int options = 80;
+		result.compress(Bitmap.CompressFormat.JPEG, options, baos);
+		// 循环判断如果压缩后图片是否大于100kb,大于继续压缩
+		while (baos.toByteArray().length / 1024 > maxSize) {
+			// 重置baos即清空baos
+			baos.reset();
+			// 每次都减少10
+			options -= 10;
+			// 这里压缩options%，把压缩后的数据存放到baos中
+			result.compress(Bitmap.CompressFormat.JPEG, options, baos);
+		}
+		ByteArrayInputStream isBm = new ByteArrayInputStream(baos.toByteArray());// 把压缩后的数据baos存放到ByteArrayInputStream中
+		Bitmap bitmap = BitmapFactory.decodeStream(isBm, null, null);// 把ByteArrayInputStream数据生成图片
+		return bitmap;
+	}
+
+	// 计算图片的缩放值
+	public static int calculateInSampleSize(BitmapFactory.Options options, int reqWidth, int reqHeight) {
+		final int height = options.outHeight;
+		final int width = options.outWidth;
+		int inSampleSize = 1;
+
+		if (height > reqHeight || width > reqWidth) {
+			final int heightRatio = Math.round((float) height / (float) reqHeight);
+			final int widthRatio = Math.round((float) width / (float) reqWidth);
+			inSampleSize = heightRatio < widthRatio ? heightRatio : widthRatio;
+		}
+		return inSampleSize;
+	}
+
+	// 根据路径获得图片并压缩，返回bitmap用于显示
+	public static Bitmap getSmallBitmap(String filePath) {
+		final BitmapFactory.Options options = new BitmapFactory.Options();
+		options.inJustDecodeBounds = true;
+		BitmapFactory.decodeFile(filePath, options);
+
+		// Calculate inSampleSize
+		options.inSampleSize = calculateInSampleSize(options, 480, 800);
+
+		// Decode bitmap with inSampleSize set
+		options.inJustDecodeBounds = false;
+
+		return BitmapFactory.decodeFile(filePath, options);
+
+	}
+
+	// 把bitmap转换成String getSmallBitmap方法需要
+	public static String bitmapToString(String filePath) {
+
+		Bitmap bm = getSmallBitmap(filePath);
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		bm.compress(Bitmap.CompressFormat.JPEG, 40, baos);
+		byte[] b = baos.toByteArray();
+		return Base64.encodeToString(b, Base64.DEFAULT);
+	}
+
+}
